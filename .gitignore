@@ -1,0 +1,25 @@
+# Cache Python et Jupyter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Environnements virtuels et variables secrètes
+venv/
+.venv/
+.env
+
+# Fichiers système (Mac / Windows / VS Code)
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Optionnel : décommenter la ligne suivante si vos fichiers bruts dépassent 50 Mo
+# Ignorer les données lourdes
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
