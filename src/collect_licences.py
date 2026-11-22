@@ -384,3 +384,54 @@ def construire_base_ages_2019_2025(code_fed_cible: str = "123") -> pd.DataFrame:
     df_res = pd.concat([pd.DataFrame(l) if isinstance(l, list) else l for l in [lignes[:-1], lignes[-1]]], ignore_index=True)
     df_res = df_res[df_res["tranche_age"] != "Non renseigné"]
     return df_res.groupby(["annee", "code_fed", "tranche_age"], as_index=False)["licences"].sum()
+
+
+    ###LONDRES  
+def charger_historique_national(forcer: bool = False) -> pd.DataFrame:
+    """Télécharge et nettoie la série historique nationale des licences (2002-2025), hors lignes TOT."""
+    chemin_parquet = PROCESSED_DIR / "licences_histo_national.parquet"
+    if chemin_parquet.exists() and not forcer:
+        df_cache = pd.read_parquet(chemin_parquet)
+        if not df_cache.empty and "TOT" not in df_cache["code_fed"].values:
+            return df_cache
+
+    url_histo = (
+        "https://data.sports.gouv.fr/api/explore/v2.1/catalog/datasets/"
+        "lics_histo/exports/csv?delimiter=%3B"
+    )
+    df = pd.read_csv(url_histo, sep=";", dtype=str)
+    df.columns = [c.strip().lower() for c in df.columns]
+
+    annees_num = pd.to_numeric(
+        df["annee"].astype(str).str.extract(r"^(\d{4})")[0], errors="coerce"
+    )
+    lics_num = pd.to_numeric(
+        df["lics"].astype(str).str.replace(r"\s+", "", regex=True).str.replace(",", ".", regex=False),
+        errors="coerce",
+    )
+
+    df_clean = pd.DataFrame({
+        "code_fed": df["code_fede_ref"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True),
+        "nom_fed": df["federation"].astype(str).str.strip(),
+        "type_fed": df["fede_gp"].astype(str).str.strip() if "fede_gp" in df.columns else "",
+        "annee": annees_num,
+        "licences": lics_num,
+    }).dropna(subset=["annee", "licences"])
+
+    # Exclusion des lignes agrégées (code_fed == "TOT" ou mention "champ constant")
+    masque_agr = (
+        df_clean["code_fed"].str.upper().isin(["TOT", "TOTAL", "NAN", "NONE", ""])
+        | df_clean["nom_fed"].str.contains("champ constant|toutes fédés", case=False, na=False)
+    )
+    df_clean = df_clean[~masque_agr].copy()
+
+    df_clean["annee"] = df_clean["annee"].astype(int)
+    df_clean = df_clean.groupby(["code_fed", "annee"], as_index=False).agg(
+        nom_fed=("nom_fed", "last"),
+        type_fed=("type_fed", "last"),
+        licences=("licences", "sum"),
+    )
+
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    df_clean.to_parquet(chemin_parquet, index=False)
+    return df_clean

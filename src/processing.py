@@ -100,3 +100,143 @@ def analyser_effet_genre(
     agg["indice_h"] = (agg["licences_h"] / ref["licences_h"]) * 100
 
     return agg
+
+
+#### MEDAILLES JO
+
+MAPPING_DISCIPLINE_FED = {
+    "Athlétisme": "101",
+    "Aviron": "102",
+    "Badminton": "103",
+    "Basketball": "105",
+    "Basketball 3x3": "105",
+    "Boxe": "106",
+    "Canoë-kayak slalom": "107",
+    "Canoë-kayak sprint": "107",
+    "Cyclisme sur route": "108",
+    "Cyclisme sur piste": "108",
+    "Cyclisme Mountain Bike": "108",
+    "Cyclisme BMX Racing": "108",
+    "Cyclisme BMX Freestyle": "108",
+    "Sports équestres": "109",
+    "Escrime": "110",
+    "Football": "111",
+    "Gymnastique artistique": "113",
+    "Gymnastique rythmique": "113",
+    "Trampoline": "113",
+    "Handball": "114",
+    "Haltérophilie": "115",
+    "Hockey": "116",
+    "Judo": "117",
+    "Lutte": "118",
+    "Natation": "119",
+    "Natation, marathon": "119",
+    "Natation artistique": "119",
+    "Plongeon": "119",
+    "Water-polo": "119",
+    "Taekwondo": "122",
+    "Tennis": "123",
+    "Tennis de table": "124",
+    "Tir": "125",
+    "Tir à l'arc": "126",
+    "Triathlon": "127",
+    "Voile": "128",
+    "Volleyball": "129",
+    "Volleyball de plage": "129",
+    "Rugby à sept": "133",
+}
+
+
+def synthetiser_paris_2024_france(df_athletes: pd.DataFrame) -> pd.DataFrame:
+    """Agrège les athlètes et médailles de la délégation française à Paris 2024 par discipline."""
+    df_fr = df_athletes[df_athletes["Pays"].str.strip() == "France"].copy()
+    if "Fonction" in df_fr.columns:
+        df_fr = df_fr[df_fr["Fonction"].str.strip() == "Athlète"]
+
+    for col in ["Médailles d'or", "Médailles d'argent", "Médailles de bronze"]:
+        df_fr[col] = pd.to_numeric(df_fr[col], errors="coerce").fillna(0).astype(int)
+
+    df_fr["total_medailles_indiv"] = (
+        df_fr["Médailles d'or"] + df_fr["Médailles d'argent"] + df_fr["Médailles de bronze"]
+    )
+
+    agg = (
+        df_fr.groupby("Discipline", as_index=False)
+        .agg(
+            nb_athletes=("nom", "nunique"),
+            medailles_or=("Médailles d'or", "sum"),
+            medailles_argent=("Médailles d'argent", "sum"),
+            medailles_bronze=("Médailles de bronze", "sum"),
+            total_medailles=("total_medailles_indiv", "sum"),
+        )
+        .sort_values(["total_medailles", "nb_athletes"], ascending=False)
+    )
+    agg["code_fed"] = agg["Discipline"].map(MAPPING_DISCIPLINE_FED)
+    return agg
+
+def synthetiser_medailles_2012_2014(
+    df_medailles: pd.DataFrame, annee_jo: int = 2012, type_jeux: str = "Olympique"
+) -> pd.DataFrame:
+    """Agrège les médailles françaises aux JO 2012 (ou 2014) par discipline."""
+    df_sub = df_medailles[
+        (pd.to_numeric(df_medailles["Année"], errors="coerce") == annee_jo)
+        & (df_medailles["Olympique/paralympique"].str.strip() == type_jeux)
+    ].copy()
+
+    df_sub["athlete_id"] = (
+        df_sub["NOM"].fillna("").str.strip() + " " + df_sub["Prénom"].fillna("").str.strip()
+    )
+
+    agg = (
+        df_sub.groupby(["Fédération", "Discipline"], as_index=False)
+        .agg(
+            nb_athletes=("athlete_id", "nunique"),
+            total_medailles=("MEDAILLE(S)", "count"),
+            medailles_or=("MEDAILLE(S)", lambda s: (s.str.strip().str.lower() == "or").sum()),
+        )
+        .sort_values("total_medailles", ascending=False)
+    )
+    agg["code_fed"] = agg["Discipline"].map(MAPPING_DISCIPLINE_FED)
+    return agg
+
+
+def croiser_medailles_et_croissance(
+    df_licences: pd.DataFrame,
+    df_jo: pd.DataFrame,
+    annee_debut: int = 2023,
+    annee_fin: int = 2025,
+) -> pd.DataFrame:
+    """Relie les médailles/athlètes d'une édition JO à la croissance des licences par fédération."""
+    agg_dict = {
+        "disciplines_jo": ("Discipline", lambda s: ", ".join(sorted(set(s)))),
+        "medailles_or": ("medailles_or", "sum"),
+        "total_medailles": ("total_medailles", "sum"),
+    }
+    if "nb_athletes" in df_jo.columns:
+        agg_dict["nb_athletes"] = ("nb_athletes", "sum")
+
+    jo_fed = (
+        df_jo.dropna(subset=["code_fed"])
+        .groupby("code_fed", as_index=False)
+        .agg(**agg_dict)
+    )
+
+    df_sub = df_licences[df_licences["annee"].isin([annee_debut, annee_fin])].copy()
+    df_sub["code_fed"] = df_sub["code_fed"].astype(str).str.strip()
+
+    noms_recents = (
+        df_sub.sort_values("annee")
+        .drop_duplicates("code_fed", keep="last")[["code_fed", "nom_fed"]]
+    )
+
+    lic_nat = df_sub.groupby(["code_fed", "annee"], as_index=False)["licences"].sum()
+    piv = lic_nat.pivot(index="code_fed", columns="annee", values="licences").reset_index()
+    piv = piv.merge(noms_recents, on="code_fed", how="left")
+
+    piv["croissance_pct"] = ((piv[annee_fin] - piv[annee_debut]) / piv[annee_debut]) * 100
+    piv["gain_net"] = piv[annee_fin] - piv[annee_debut]
+
+    return piv.merge(jo_fed, on="code_fed", how="inner").sort_values("croissance_pct", ascending=False)
+
+
+

@@ -159,3 +159,184 @@ def plot_effet_age(df_ages: pd.DataFrame, nom_sport: str, nom_star: str, annee_r
     fig.add_vline(x=2024, line_dash="dash", line_color="#d62728", annotation_text="JO Paris 2024")
     fig.update_traces(line=dict(width=3))
     return fig
+
+
+    #  MEDAILLES JO
+
+def plot_medailles_vs_croissance(df_croise: pd.DataFrame) -> go.Figure:
+    """Nuage de points propre : médailles françaises vs croissance des licences (2023-2025)."""
+    df = df_croise.copy()
+
+    # Raccourcit les noms de fédérations pour éviter les chevauchements sur le graphique
+    df["label_court"] = (
+        df["nom_fed"]
+        .str.replace("Fédération Française de ", "", regex=False)
+        .str.replace("Fédération Française d'", "", regex=False)
+        .str.replace("Fédération Française des ", "", regex=False)
+        .str.replace(", Jujitsu, Kendo et Disciplines Associées", "", regex=False)
+        .str.replace(" et Disciplines Enchainées", "", regex=False)
+        .str.replace(" et Disciplines Associées", "", regex=False)
+        .str.replace(" et Sports de Pagaie", "", regex=False)
+    )
+
+    # Met en évidence le Tennis de table par rapport aux autres sports
+    df["categorie"] = df["code_fed"].apply(
+        lambda c: "Tennis de table (Frères Lebrun)" if str(c) == "124" else "Autres fédérations olympiques"
+    )
+
+    croissance_moyenne = df["croissance_pct"].mean()
+
+    fig = px.scatter(
+        df,
+        x="total_medailles",
+        y="croissance_pct",
+        size="nb_athletes",
+        color="categorie",
+        color_discrete_map={
+            "Tennis de table (Frères Lebrun)": "#d62728",
+            "Autres fédérations olympiques": "#1f77b4",
+        },
+        text="label_court",
+        hover_name="nom_fed",
+        hover_data={
+            "disciplines_jo": True,
+            "gain_net": ":+,.0f",
+            "medailles_or": True,
+            "categorie": False,
+            "label_court": False,
+        },
+        title="Effet Paris 2024 : médailles françaises vs croissance des licences (2023–2025)",
+        labels={
+            "total_medailles": "Nombre de médailles françaises (cumul athlètes)",
+            "croissance_pct": "Croissance des licences 2023–2025 (%)",
+            "nb_athletes": "Athlètes engagés",
+            "categorie": "",
+        },
+        template="plotly_white",
+    )
+
+    fig.update_traces(textposition="top center", textfont=dict(size=10), marker=dict(opacity=0.85))
+    fig.add_hline(y=0, line_dash="solid", line_color="lightgray")
+    fig.add_hline(
+        y=croissance_moyenne,
+        line_dash="dot",
+        line_color="gray",
+        annotation_text=f"Moyenne des sports ({croissance_moyenne:.1f} %)",
+        annotation_position="bottom right",
+    )
+    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    return fig
+
+
+
+#### CYLCLES OLYMP
+
+def plot_historique_olympique(df_histo: pd.DataFrame, code_fed: str = "124", nom_sport: str = "Tennis de table") -> go.Figure:
+    """Trace l'évolution nationale longue des licences avec les repères des Jeux Olympiques."""
+    df_sub = df_histo[df_histo["code_fed"] == str(code_fed)].sort_values("annee").copy()
+
+    fig = px.line(
+        df_sub,
+        x="annee",
+        y="licences",
+        markers=True,
+        title=f"{nom_sport} : trajectoire historique des licences et cycles olympiques",
+        labels={"annee": "Année (millésime)", "licences": "Nombre total de licenciés"},
+        template="plotly_white",
+    )
+    fig.update_traces(line=dict(width=3, color="#1f77b4"))
+
+    olympiades = [
+        (2004, "Athènes"),
+        (2008, "Pékin"),
+        (2012, "Londres"),
+        (2016, "Rio"),
+        (2021, "Tokyo"),
+        (2024, "Paris"),
+    ]
+    for annee_jo, ville in olympiades:
+        if df_sub["annee"].min() <= annee_jo <= df_sub["annee"].max():
+            couleur = "#d62728" if ville == "Paris" else "gray"
+            fig.add_vline(
+                x=annee_jo,
+                line_dash="dash",
+                line_color=couleur,
+                annotation_text=ville,
+                annotation_position="top left",
+            )
+
+    return fig
+
+
+#IMPACT JO FR
+def plot_historique_global_france(df_histo: pd.DataFrame, par_type: bool = True) -> go.Figure:
+    """Trace l'évolution nationale longue des licences sportives en France (hors lignes de sous-totaux)."""
+    df = df_histo.copy()
+
+    # Exclusion des lignes de totaux agrégés présentes dans lics_histo à partir de 2016
+    masque_total = (
+        df["nom_fed"].str.contains("toutes|total|ensemble", case=False, na=False)
+        | df["type_fed"].str.contains("toutes|total", case=False, na=False)
+        | df["code_fed"].isin(["999", "000", "TOTAL", "nan", "None"])
+    )
+    df = df[~masque_total].copy()
+
+    if par_type and "type_fed" in df.columns and df["type_fed"].nunique() > 1:
+        df["categorie"] = (
+            df["type_fed"]
+            .astype(str)
+            .str.replace(r"^\d+\.\s*", "", regex=True)
+            .str.strip()
+        )
+        df_agg = df.groupby(["annee", "categorie"], as_index=False)["licences"].sum()
+
+        fig = px.line(
+            df_agg,
+            x="annee",
+            y="licences",
+            color="categorie",
+            markers=True,
+            title="France entière : évolution des licences par type de fédération (2002–2025)",
+            labels={
+                "annee": "Année (millésime)",
+                "licences": "Nombre total de licenciés",
+                "categorie": "Catégorie de fédération",
+            },
+            template="plotly_white",
+        )
+    else:
+        df_agg = df.groupby("annee", as_index=False)["licences"].sum()
+        fig = px.line(
+            df_agg,
+            x="annee",
+            y="licences",
+            markers=True,
+            title="France entière : évolution totale des licences sportives et cycles olympiques (2002–2025)",
+            labels={"annee": "Année (millésime)", "licences": "Nombre total de licenciés"},
+            template="plotly_white",
+        )
+        fig.update_traces(line=dict(width=3, color="#1f77b4"))
+
+    fig.update_traces(line=dict(width=2.5))
+
+    olympiades = [
+        (2004, "Athènes"),
+        (2008, "Pékin"),
+        (2012, "Londres"),
+        (2016, "Rio"),
+        (2021, "Tokyo"),
+        (2024, "Paris"),
+    ]
+    for annee_jo, ville in olympiades:
+        if df_agg["annee"].min() <= annee_jo <= df_agg["annee"].max():
+            couleur = "#d62728" if ville == "Paris" else "gray"
+            fig.add_vline(
+                x=annee_jo,
+                line_dash="dash",
+                line_color=couleur,
+                annotation_text=ville,
+                annotation_position="top left",
+            )
+
+    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    return fig
