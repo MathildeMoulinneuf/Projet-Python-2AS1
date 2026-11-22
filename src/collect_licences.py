@@ -12,6 +12,9 @@ RAW_DIR = Path("data/raw")
 PROCESSED_DIR = Path("data/processed")
 RAW_DIR.mkdir(parents=True, exist_ok=True)
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+import re
+import requests
+
 
 
 def get_licences_resources() -> pd.DataFrame:
@@ -118,8 +121,14 @@ def construire_base_departementale() -> pd.DataFrame:
 
     fichiers = sorted(RAW_DIR.glob("lic-data-*.csv"))
     if not fichiers:
-        raise FileNotFoundError("Aucun fichier lic-data-*.csv trouvé dans data/raw/.")
-
+        df_res = get_licences_resources()
+        for _, row in df_res.iterrows():
+            match_annee = re.search(r"(20\d{2})", str(row["title"]))
+            nom_fichier = f"lic-data-{match_annee.group(1)}.csv" if match_annee else row["title"]
+            if not nom_fichier.endswith(".csv"):
+                nom_fichier += ".csv"
+            download_file(row["url"], RAW_DIR / nom_fichier)
+        fichiers = sorted(RAW_DIR.glob("lic-data-*.csv"))
     tables_annuelles = []
 
     for fichier in fichiers:
