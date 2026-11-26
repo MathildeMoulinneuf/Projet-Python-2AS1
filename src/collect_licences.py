@@ -26,13 +26,14 @@ def get_licences_resources() -> pd.DataFrame:
     rows = []
     for res in resources:
         title = res.get("title", "")
-        if "lic-data-" in title.lower() and res.get("format", "").lower() == "csv":
+        if ("lic-data-" in title.lower() or "Licences_" in title.lower()) and res.get("format", "").lower() == "csv":
             rows.append({
                 "title": title,
                 "url": res["url"],
                 "size_mb": round((res.get("filesize") or 0) / 1e6, 1),
                 "last_modified": res.get("last_modified"),
             })
+    print(rows)
     return pd.DataFrame(rows).sort_values("title", ascending=False)
 
 

@@ -14,6 +14,9 @@ def plot_effet_local_base100(
     nom_star: str,
     annee_ref: int = 2023,
     annee_evenement: int = 2024,
+    evenement_label: str = "JO Paris 2024",
+    annee_evenement2: int = None,
+    evenement_label2: str = None,
 ) -> go.Figure:
     """Trace les courbes comparatives Base 100 entre le fief de la star et le reste de la France."""
     fig = px.line(
@@ -37,9 +40,16 @@ def plot_effet_local_base100(
         x=annee_evenement,
         line_dash="dash",
         line_color="#d62728",
-        annotation_text="JO Paris 2024",
+        annotation_text=evenement_label,
         annotation_position="top left",
     )
+    fig.add_vline(
+            x=annee_evenement2,
+            line_dash="dash",
+            line_color="#d62728",
+            annotation_text=evenement_label2,
+            annotation_position="top left",
+        )
     fig.update_traces(line=dict(width=3))
     return fig
 
