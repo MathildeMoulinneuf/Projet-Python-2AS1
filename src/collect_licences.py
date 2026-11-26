@@ -93,7 +93,7 @@ def _detecter_colonnes(cols: list[str], annee: int) -> dict:
     )
     col_code_fed = next(
         (cols_lower[k] for k in [f"fed_{annee}", "code", "fed_code", "code_fede"] if k in cols_lower),
-        None,
+        next((c for k, c in cols_lower.items() if re.fullmatch(r"fed_\d{4}", k)), None),
     )
     col_lic = next(
         (cols_lower[k] for k in [f"l_{annee}", "total", "l_tot", "licences"] if k in cols_lower),
@@ -101,8 +101,14 @@ def _detecter_colonnes(cols: list[str], annee: int) -> dict:
     )
 
     # Colonnes sexe directes (avant 2019) ou par tranche d'âge (à partir de 2019)
-    col_lic_f = next((cols_lower[k] for k in [f"l_f_{annee}", "l_f"] if k in cols_lower), None)
-    col_lic_h = next((cols_lower[k] for k in [f"l_h_{annee}", "l_h"] if k in cols_lower), None)
+    col_lic_f = next(
+        (cols_lower[k] for k in [f"l_f_{annee}", f"lic_f_{annee}", "l_f"] if k in cols_lower),
+        None,
+    )
+    col_lic_h = next(
+        (cols_lower[k] for k in [f"l_h_{annee}", f"lic_h_{annee}", "l_h"] if k in cols_lower),
+        None,
+    )
     cols_ages_f = [c for c in cols if c.startswith("F - ")]
     cols_ages_h = [c for c in cols if c.startswith("H - ")]
 
@@ -146,14 +152,21 @@ def construire_base_departementale() -> pd.DataFrame:
             continue
         annee = int(match_annee.group(1))
 
-        encodage = "utf-8"
+        encodage, separateur, entete = "utf-8", ";", None
         for enc in ("utf-8", "latin1"):
-            try:
-                entete = pd.read_csv(fichier, sep=";", encoding=enc, nrows=2, quoting=3)
-                encodage = enc
+            for sep in (";", ","):
+                try:
+                    test = pd.read_csv(fichier, sep=sep, encoding=enc, nrows=2, quoting=3)
+                    if test.shape[1] > 1:
+                        encodage, separateur, entete = enc, sep, test
+                        break
+                except UnicodeDecodeError:
+                    continue
+            if entete is not None:
                 break
-            except UnicodeDecodeError:
-                continue
+
+        if entete is None:
+            raise ValueError(f"Impossible de lire l'en-tête de {fichier.name}")
 
         cols_propres = [c.strip('" ') for c in entete.columns]
         m = _detecter_colonnes(cols_propres, annee)
@@ -166,7 +179,7 @@ def construire_base_departementale() -> pd.DataFrame:
         morceaux = []
         for chunk in pd.read_csv(
             fichier,
-            sep=";",
+            sep=separateur,
             encoding=encodage,
             usecols=lambda c: c.strip('" ') in usecols_set,
             dtype=str,
