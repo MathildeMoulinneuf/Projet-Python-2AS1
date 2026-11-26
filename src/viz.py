@@ -14,7 +14,7 @@ def plot_effet_local_base100(
     nom_star: str,
     annee_ref: int = 2023,
     annee_evenement: int = 2024,
-    evenement_label: str = "JO Paris 2024",
+    evenement_label: str = "JO-Paris 2024",
     annee_evenement2: int = None,
     evenement_label2: str = None,
 ) -> go.Figure:
@@ -43,13 +43,14 @@ def plot_effet_local_base100(
         annotation_text=evenement_label,
         annotation_position="top left",
     )
-    fig.add_vline(
-            x=annee_evenement2,
-            line_dash="dash",
-            line_color="#d62728",
-            annotation_text=evenement_label2,
-            annotation_position="top left",
-        )
+    if annee_evenement2 is not None and evenement_label2 is not None:
+        fig.add_vline(
+                x=annee_evenement2,
+                line_dash="dash",
+                line_color="#d62728",
+                annotation_text=evenement_label2,
+                annotation_position="top left",
+            )
     fig.update_traces(line=dict(width=3))
     return fig
 
