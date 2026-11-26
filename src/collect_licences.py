@@ -76,9 +76,17 @@ def _detecter_colonnes(cols: list[str], annee: int) -> dict:
     cols_lower = {c.lower().strip(): c for c in cols}
 
     col_commune = next(
-        (cols_lower[k] for k in ["code_commune", "code commune"] if k in cols_lower),
-        None,
-    )
+    (cols_lower[k]for k in [
+            "code_commune",
+            "code commune",
+            "newcog2",
+            "newcog",
+            "codgeo",
+            "cog",
+            "code_insee",
+        ]if k in cols_lower),
+    None,
+)
     col_nom_fed = next(
         (cols_lower[k] for k in ["nom_fed", "fédération", "federation", "lib_fed"] if k in cols_lower),
         None,
