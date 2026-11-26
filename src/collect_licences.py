@@ -26,7 +26,7 @@ def get_licences_resources() -> pd.DataFrame:
     rows = []
     for res in resources:
         title = res.get("title", "")
-        if ("lic-data-" in title.lower() or "Licences_" in title.lower()) and res.get("format", "").lower() == "csv":
+        if ("lic-data-" in title.lower() or "licences_" in title.lower()) and res.get("format", "").lower() == "csv":
             rows.append({
                 "title": title,
                 "url": res["url"],
