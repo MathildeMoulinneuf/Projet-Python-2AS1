@@ -340,3 +340,424 @@ def plot_historique_global_france(df_histo: pd.DataFrame, par_type: bool = True)
 
     fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
     return fig
+
+
+
+def plot_attention_mediatique(df_vues: pd.DataFrame) -> go.Figure:
+    """Trace l'évolution mensuelle des consultations Wikipédia autour des JO de Paris 2024."""
+    fig = px.line(
+        df_vues,
+        x="date",
+        y="vues",
+        color="personnalite",
+        markers=True,
+        title="Attention médiatique : vues mensuelles sur Wikipédia France (2023–2025)",
+        labels={
+            "date": "Mois",
+            "vues": "Nombre de pages vues",
+            "personnalite": "Athlète",
+        },
+        template="plotly_white",
+    )
+    fig.update_traces(line=dict(width=2.5))
+
+    fig.add_vrect(
+        x0="2024-07-26",
+        x1="2024-08-11",
+        fillcolor="red",
+        opacity=0.12,
+        line_width=0,
+        annotation_text="JO Paris 2024",
+        annotation_position="top left",
+    )
+
+
+    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    return fig
+
+
+
+def plot_attention_mediatique_zoom(df_vues_jour: pd.DataFrame) -> go.Figure:
+    """Trace l'évolution journalière des consultations Wikipédia autour des JO (juillet-septembre 2024)."""
+    fig = px.line(
+        df_vues_jour,
+        x="date",
+        y="vues",
+        color="personnalite",
+        title="Zoom journalier : attention médiatique pendant Paris 2024 et à la rentrée (été 2024)",
+        labels={
+            "date": "Date",
+            "vues": "Pages vues par jour",
+            "personnalite": "Athlète",
+        },
+        template="plotly_white",
+    )
+    fig.update_traces(line=dict(width=2.2))
+
+    # Fenêtre officielle des JO de Paris 2024
+    fig.add_vrect(
+        x0="2024-07-26",
+        x1="2024-08-11",
+        fillcolor="grey",
+        opacity=0.10,
+        line_width=0,
+        annotation_text="JO Paris 2024 (26 juil. - 11 août)",
+        annotation_position="top left",
+    )
+
+
+
+    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    return fig
+
+
+from plotly.subplots import make_subplots
+
+
+def plot_comparaison_lebrun_ferrand_prevot(df_comp: pd.DataFrame, annee_ref: int = 2023) -> go.Figure:
+    """Compare côte à côte l'évolution totale et féminine de deux fédérations en base 100."""
+    fig = make_subplots(
+        rows=1,
+        cols=2,
+        subplot_titles=(
+            f"Total des licenciés (Base 100 en {annee_ref})",
+            f"Licenciées femmes uniquement (Base 100 en {annee_ref})",
+        ),
+    )
+
+    couleurs = {"Tennis de table (Frères Lebrun)": "#1f77b4", "Cyclisme (P. Ferrand-Prévot)": "#e377c2"}
+
+    for fed, groupe in df_comp.groupby("federation"):
+        couleur = couleurs.get(fed, None)
+        fig.add_trace(
+            go.Scatter(
+                x=groupe["annee"],
+                y=groupe["indice_total"],
+                mode="lines+markers",
+                name=fed,
+                legendgroup=fed,
+                line=dict(width=3, color=couleur),
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=groupe["annee"],
+                y=groupe["indice_femmes"],
+                mode="lines+markers",
+                name=fed,
+                legendgroup=fed,
+                showlegend=False,
+                line=dict(width=3, color=couleur),
+            ),
+            row=1,
+            col=2,
+        )
+
+    for col in (1, 2):
+        fig.add_hline(y=100, line_dash="dot", line_color="gray", row=1, col=col)
+        fig.add_vline(x=2024, line_dash="dash", line_color="#d62728", row=1, col=col)
+
+    fig.update_layout(
+        title="Comparaison directe : effet Frères Lebrun (FFTT) vs effet Pauline Ferrand-Prévot (FFC)",
+        template="plotly_white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="right", x=1),
+    )
+    fig.update_yaxes(title_text=f"Indice (Base 100 en {annee_ref})", row=1, col=1)
+    return fig
+
+
+def plot_effet_communal_compare(df_com_tt: pd.DataFrame, df_com_velo: pd.DataFrame) -> go.Figure:
+    """Compare la diffusion communale (Montpellier vs Hérault et Reims vs Marne) en base 2019 = 100."""
+    fig = make_subplots(
+        rows=1,
+        cols=2,
+        subplot_titles=("Tennis de table : Montpellier vs Hérault", "Cyclisme : Reims vs Marne"),
+    )
+
+    for col_idx, df_sub in [(1, df_com_tt), (2, df_com_velo)]:
+        for i, (terr, grp) in enumerate(df_sub.groupby("territoire")):
+            fig.add_trace(
+                go.Scatter(
+                    x=grp["annee"],
+                    y=grp["indice_2019"],
+                    mode="lines+markers",
+                    name=terr,
+                    line=dict(width=3, dash="solid" if i == 0 else "dash"),
+                ),
+                row=1,
+                col=col_idx,
+            )
+        fig.add_hline(y=100, line_dash="dot", line_color="gray", row=1, col=col_idx)
+
+    fig.update_layout(
+        title="Diffusion infra-départementale : ville d'entraînement vs reste du département (Base 2019 = 100)",
+        template="plotly_white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="right", x=1),
+    )
+    fig.update_yaxes(title_text="Indice (Base 100 en 2019)", row=1, col=1)
+    return fig
+
+
+def plot_comparaison_federations_base100(
+    df_comp: pd.DataFrame,
+    annee_ref: int = 2023,
+    titre: str = "Comparaison de deux fédérations (Base 100)",
+) -> go.Figure:
+    """Compare côte à côte l'évolution totale et féminine de plusieurs fédérations en base 100."""
+    fig = make_subplots(
+        rows=1,
+        cols=2,
+        subplot_titles=(
+            f"Total des licenciés (Base 100 en {annee_ref})",
+            f"Licenciées femmes uniquement (Base 100 en {annee_ref})",
+        ),
+    )
+
+    for fed, groupe in df_comp.groupby("federation"):
+        fig.add_trace(
+            go.Scatter(
+                x=groupe["annee"],
+                y=groupe["indice_total"],
+                mode="lines+markers",
+                name=fed,
+                legendgroup=fed,
+                line=dict(width=3),
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=groupe["annee"],
+                y=groupe["indice_femmes"],
+                mode="lines+markers",
+                name=fed,
+                legendgroup=fed,
+                showlegend=False,
+                line=dict(width=3),
+            ),
+            row=1,
+            col=2,
+        )
+
+    for col in (1, 2):
+        fig.add_hline(y=100, line_dash="dot", line_color="gray", row=1, col=col)
+        fig.add_vline(x=2024, line_dash="dash", line_color="#d62728", row=1, col=col)
+
+    fig.update_layout(
+        title=titre,
+        template="plotly_white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="right", x=1),
+    )
+    fig.update_yaxes(title_text=f"Indice (Base 100 en {annee_ref})", row=1, col=1)
+    return fig
+
+
+def plot_comparaison_longue_base100(
+    df_histo: pd.DataFrame,
+    feds: dict[str, str],
+    annee_ref: int = 2008,
+) -> go.Figure:
+    """Compare l'évolution historique (2002-2025) de plusieurs fédérations en base 100."""
+    lignes = []
+    for label, code in feds.items():
+        sub = df_histo[df_histo["code_fed"] == str(code)].sort_values("annee").copy()
+        if sub.empty or annee_ref not in sub["annee"].values:
+            continue
+        val_ref = sub.loc[sub["annee"] == annee_ref, "licences"].iloc[0]
+        sub["federation"] = label
+        sub["indice"] = (sub["licences"] / val_ref) * 100
+        lignes.append(sub)
+
+    df_plot = pd.concat(lignes, ignore_index=True)
+
+    fig = px.line(
+        df_plot,
+        x="annee",
+        y="indice",
+        color="federation",
+        markers=True,
+        title=f"Révélation vs icône installée : trajectoire historique (Base 100 en {annee_ref})",
+        labels={"annee": "Année", "indice": f"Indice des licences (Base 100 en {annee_ref})", "federation": "Fédération"},
+        template="plotly_white",
+    )
+    fig.update_traces(line=dict(width=2.8))
+    fig.add_hline(y=100, line_dash="dot", line_color="gray")
+
+    for annee_jo, ville in [(2008, "Pékin (1er podium Riner)"), (2012, "Londres"), (2016, "Rio"), (2021, "Tokyo"), (2024, "Paris")]:
+        couleur = "#d62728" if annee_jo == 2024 else "gray"
+        fig.add_vline(x=annee_jo, line_dash="dash", line_color=couleur, annotation_text=ville, annotation_position="top left")
+
+    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    return fig
+
+
+def plot_superposition_genre_role_models(
+    df_comp: pd.DataFrame,
+    annee_ref: int = 2023,
+) -> go.Figure:
+    """Superpose sur un même graphique l'évolution Femmes (trait plein) et Hommes (pointillés) de deux sports."""
+    fig = go.Figure()
+
+    styles = {
+        "Tennis de table (Frères Lebrun)": {"couleur": "#1f77b4", "label_court": "Tennis de table (Lebrun)"},
+        "Cyclisme (P. Ferrand-Prévot)": {"couleur": "#e377c2", "label_court": "Cyclisme (Ferrand-Prévot)"},
+    }
+
+    for fed, groupe in df_comp.groupby("federation"):
+        groupe = groupe.sort_values("annee")
+        cfg = styles.get(fed, {"couleur": None, "label_court": fed})
+        couleur = cfg["couleur"]
+        nom = cfg["label_court"]
+
+        # Courbe principale : Femmes (trait plein épais)
+        fig.add_trace(
+            go.Scatter(
+                x=groupe["annee"],
+                y=groupe["indice_femmes"],
+                mode="lines+markers",
+                name=f"{nom} — Femmes",
+                line=dict(color=couleur, width=3.5, dash="solid"),
+                marker=dict(size=7),
+            )
+        )
+
+        # Courbe de référence : Hommes (pointillés plus fins)
+        fig.add_trace(
+            go.Scatter(
+                x=groupe["annee"],
+                y=groupe["indice_hommes"],
+                mode="lines+markers",
+                name=f"{nom} — Hommes",
+                line=dict(color=couleur, width=2, dash="dash"),
+                marker=dict(size=5, symbol="diamond"),
+                opacity=0.65,
+            )
+        )
+
+    fig.add_hline(y=100, line_dash="dot", line_color="gray")
+    fig.add_vline(
+        x=2024,
+        line_dash="dash",
+        line_color="#d62728",
+        annotation_text="JO Paris 2024",
+        annotation_position="top left",
+    )
+
+    fig.update_layout(
+        title=f"Identification genrée : dynamique Femmes vs Hommes selon le rôle modèle (Base 100 en {annee_ref})",
+        xaxis_title="Année",
+        yaxis_title=f"Indice des licences (Base 100 en {annee_ref})",
+        template="plotly_white",
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    return fig
+
+
+def plot_evolution_passsport_sports(
+    df_pass_dep: pd.DataFrame,
+    feds: dict[str, str],
+    campagne_ref: int = 2023,
+) -> go.Figure:
+    """Compare l'évolution des recours Pass'Sport en base 100 (référence 2023) sur plusieurs disciplines."""
+    lignes = []
+    for nom_sport, code in feds.items():
+        sub = (
+            df_pass_dep[df_pass_dep["code_fed"] == str(code)]
+            .groupby("campagne", as_index=False)["nb_passsport"]
+            .sum()
+            .sort_values("campagne")
+        )
+        if sub.empty or campagne_ref not in sub["campagne"].values:
+            continue
+
+        val_ref = sub.loc[sub["campagne"] == campagne_ref, "nb_passsport"].iloc[0]
+        sub["sport"] = nom_sport
+        sub["saison"] = sub["campagne"].apply(lambda c: f"{c}/{str(c + 1)[-2:]}")
+        sub["indice"] = (sub["nb_passsport"] / val_ref) * 100
+        lignes.append(sub)
+
+    df_plot = pd.concat(lignes, ignore_index=True)
+    campagnes_uniques = sorted(df_plot["campagne"].unique())
+
+    fig = px.line(
+        df_plot,
+        x="campagne",
+        y="indice",
+        color="sport",
+        markers=True,
+        title=f"Recours au Pass'Sport par discipline (Base 100 = saison {campagne_ref}/{str(campagne_ref + 1)[-2:]})",
+        labels={
+            "campagne": "Saison sportive",
+            "indice": "Indice des activations Pass'Sport (Base 100)",
+            "sport": "Discipline",
+        },
+        hover_data={"saison": True, "campagne": False, "nb_passsport": ":,.0f", "indice": ":.1f"},
+        template="plotly_white",
+    )
+    fig.update_traces(line=dict(width=3), marker=dict(size=8))
+    fig.add_hline(y=100, line_dash="dot", line_color="gray")
+    fig.add_vline(
+        x=2024,
+        line_dash="dash",
+        line_color="#d62728",
+        annotation_text="Rentrée post-JO Paris 2024",
+        annotation_position="top left",
+    )
+    fig.update_xaxes(
+        tickmode="array",
+        tickvals=campagnes_uniques,
+        ticktext=[f"{c}/{str(c + 1)[-2:]}" for c in campagnes_uniques],
+    )
+    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    return fig
+
+
+
+def plot_rentree_hebdo_passsport(
+    df_pass_hebdo: pd.DataFrame,
+    code_fed: str = "124",
+    nom_sport: str = "Tennis de table (FFTT)",
+    campagnes: list[int] = [2023, 2024],
+) -> go.Figure:
+    """Compare le rythme hebdomadaire des activations Pass'Sport entre deux rentrées (pré-JO vs post-JO)."""
+    sub = df_pass_hebdo[
+        (df_pass_hebdo["code_fed"] == str(code_fed))
+        & (df_pass_hebdo["campagne"].isin(campagnes))
+        & (df_pass_hebdo["semaine"].between(33, 48))  # Mi-août à fin novembre
+    ].copy()
+
+    sub = (
+        sub.groupby(["campagne", "semaine"], as_index=False)["nb_passsport"]
+        .sum()
+        .sort_values(["campagne", "semaine"])
+    )
+    sub["Campagne"] = sub["campagne"].map({
+        2023: "Rentrée 2023/24 (Avant JO)",
+        2024: "Rentrée 2024/25 (Post-JO Paris 2024)",
+    }).fillna(sub["campagne"].astype(str))
+
+    fig = px.bar(
+        sub,
+        x="semaine",
+        y="nb_passsport",
+        color="Campagne",
+        barmode="group",
+        title=f"{nom_sport} : activations hebdomadaires du Pass'Sport à la rentrée",
+        labels={
+            "semaine": "Numéro de semaine (35 = fin août / rentrée scolaire)",
+            "nb_passsport": "Nombre de Pass'Sport activés",
+        },
+        color_discrete_map={
+            "Rentrée 2023/24 (Avant JO)": "#7f7f7f",
+            "Rentrée 2024/25 (Post-JO Paris 2024)": "#1f77b4",
+        },
+        template="plotly_white",
+    )
+
+
+    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    return fig

@@ -239,4 +239,55 @@ def croiser_medailles_et_croissance(
     return piv.merge(jo_fed, on="code_fed", how="inner").sort_values("croissance_pct", ascending=False)
 
 
+def comparer_deux_federations_base100(
+    df_licences: pd.DataFrame,
+    feds: dict[str, str],
+    annee_ref: int = 2023,
+) -> pd.DataFrame:
+    """Compare l'évolution en base 100 (Total, Femmes, Hommes) de plusieurs fédérations."""
+    df = df_licences.copy()
+    df["code_fed"] = df["code_fed"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
 
+    resultats = []
+    for label, code in feds.items():
+        sub = (
+            df[df["code_fed"] == str(code)]
+            .groupby("annee", as_index=False)[["licences", "licences_f", "licences_h"]]
+            .sum()
+            .sort_values("annee")
+        )
+        if sub.empty or annee_ref not in sub["annee"].values:
+            continue
+
+        ref = sub.loc[sub["annee"] == annee_ref].iloc[0]
+        sub["federation"] = label
+        sub["indice_total"] = (sub["licences"] / ref["licences"]) * 100
+        sub["indice_femmes"] = (sub["licences_f"] / ref["licences_f"]) * 100
+        sub["indice_hommes"] = (sub["licences_h"] / ref["licences_h"]) * 100
+        resultats.append(sub)
+
+    return pd.concat(resultats, ignore_index=True)
+
+
+def analyser_persistance_olympique(
+    
+    df_histo: pd.DataFrame,
+    codes_feds: dict[str, str],
+    annees_jo: list[int] = [2008, 2012, 2016, 2024],
+) -> pd.DataFrame:
+    """Calcule la variation des licences en t+1 et t+2 après chaque olympiade (Base 100 = année des JO)."""
+    lignes = []
+    for nom_sport, code in codes_feds.items():
+        sub = df_histo[df_histo["code_fed"] == str(code)].set_index("annee")["licences"]
+        for jo in annees_jo:
+            if jo not in sub.index:
+                continue
+            val_jo = sub.loc[jo]
+            lignes.append({
+                "sport": nom_sport,
+                "olympiade": jo,
+                "licences_jo": val_jo,
+                "evol_t1_pct": ((sub.loc[jo + 1] / val_jo) - 1) * 100 if (jo + 1) in sub.index else None,
+                "evol_t2_pct": ((sub.loc[jo + 2] / val_jo) - 1) * 100 if (jo + 2) in sub.index else None,
+            })
+    return pd.DataFrame(lignes)

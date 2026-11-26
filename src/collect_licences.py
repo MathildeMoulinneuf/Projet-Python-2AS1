@@ -444,3 +444,83 @@ def charger_historique_national(forcer: bool = False) -> pd.DataFrame:
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     df_clean.to_parquet(chemin_parquet, index=False)
     return df_clean
+
+
+def extraire_serie_communale_dep(
+    code_fed_cible: str,
+    dep_cible: str,
+    commune_cible: str,
+    label_commune: str,
+    label_reste_dep: str,
+    annees: range = range(2016, 2024),
+) -> pd.DataFrame:
+    """Compare l'évolution des licences dans une commune clé vs le reste de son département (2016-2023)."""
+    code_cible_clean = str(code_fed_cible).strip().lstrip("0")
+    lignes = []
+
+    for annee in annees:
+        fichier = RAW_DIR / f"lic-data-{annee}.csv"
+        if not fichier.exists():
+            continue
+
+        encodage = "utf-8"
+        entete = None
+        for enc in ("utf-8", "latin1"):
+            try:
+                entete = pd.read_csv(fichier, sep=";", encoding=enc, nrows=2, quoting=3)
+                encodage = enc
+                break
+            except Exception:
+                continue
+
+        if entete is None:
+            continue
+
+        cols_propres = [c.strip('" ') for c in entete.columns]
+        m = _detecter_colonnes(cols_propres, annee)
+        cols_fed = [c for c in [m["code_fed"]] if c is not None]
+        usecols_set = {m["commune"], m["lic"]} | set(cols_fed)
+
+        tot_commune = 0.0
+        tot_reste = 0.0
+
+        for chunk in pd.read_csv(
+            fichier,
+            sep=";",
+            encoding=encodage,
+            usecols=lambda c: c.strip('" ') in usecols_set,
+            dtype=str,
+            chunksize=100_000,
+            quoting=3,
+            on_bad_lines="warn",
+        ):
+            chunk.columns = [c.strip('" ') for c in chunk.columns]
+            for c in chunk.columns:
+                chunk[c] = chunk[c].fillna("").str.strip('" ')
+
+            chunk["code_clean"] = chunk[m["code_fed"]].str.replace(r"\.0$", "", regex=True).str.lstrip("0")
+            chunk["commune_clean"] = chunk[m["commune"]].str.zfill(5)
+            chunk["dep_clean"] = _extraire_departement(chunk["commune_clean"])
+
+            sub = chunk[(chunk["code_clean"] == code_cible_clean) & (chunk["dep_clean"] == dep_cible)].copy()
+            if sub.empty:
+                continue
+
+            sub["lic_num"] = pd.to_numeric(sub[m["lic"]], errors="coerce").fillna(0)
+            masque_com = sub["commune_clean"] == commune_cible
+            tot_commune += sub.loc[masque_com, "lic_num"].sum()
+            tot_reste += sub.loc[~masque_com, "lic_num"].sum()
+
+        lignes.append({"annee": annee, "territoire": label_commune, "licences": tot_commune})
+        lignes.append({"annee": annee, "territoire": label_reste_dep, "licences": tot_reste})
+
+    df_res = pd.DataFrame(lignes)
+    if df_res.empty or 2019 not in df_res["annee"].values:
+        return df_res
+
+    refs = df_res[df_res["annee"] == 2019].set_index("territoire")["licences"]
+    df_res["indice_2019"] = df_res.apply(
+        lambda r: (r["licences"] / refs[r["territoire"]]) * 100 if refs[r["territoire"]] > 0 else 0,
+        axis=1,
+    )
+    return df_res
